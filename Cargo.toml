@@ -1,0 +1,11 @@
+[package]
+name = "uv_checker_gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.28"
+image = { version = "0.25", features = ["png"] }
+imageproc = "0.26"
+rfd = "0.17"
+
