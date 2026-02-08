@@ -203,6 +203,7 @@ struct UvApp {
   uv_path: Option<PathBuf>,
   result_texture: Option<TextureHandle>,
   status: String,
+  zoom: f32,
 }
 
 impl Default for UvApp {
@@ -211,6 +212,7 @@ impl Default for UvApp {
       uv_path: None,
       result_texture: None,
       status: "No file loaded".to_string(),
+      zoom: 1.0, //100%
     }
   }
 }
@@ -220,18 +222,10 @@ impl eframe::App for UvApp {
     egui::CentralPanel::default().show(ctx, |ui| {
       ui.horizontal(|ui| {
         if ui.button("Load image").clicked() {
-          println!("click");
+          if let Some(path) = rfd::FileDialog::new().pick_file() {
+            self.uv_path = Some(path.clone());
+            self.status = "Analyzing...".to_string();
 
-          // rfd でネイティブファイルダイアログ
-          if let Some(path) = rfd::FileDialog::new()
-            //.add_filter("PNG", &["png"])
-            .pick_file()
-          //let path = std::path::PathBuf::from("uv_layout.png")
-          {
-            self.uv_path = Some(path.clone()); // Clone before borrow
-            self.status = "Analyzing...".to_string(); // <- INSIDE if let
-
-            // Analyze (single match block)
             match analyze_uv(&path) {
               Ok(result_img) => {
                 let color_img = rgba_image_to_color_image(&result_img);
@@ -255,19 +249,39 @@ impl eframe::App for UvApp {
       });
 
       ui.label(&self.status);
-
-      // 画像表示部分
       ui.separator();
 
+      ui.horizontal(|ui| {
+        if ui.button("−").clicked() {
+          self.zoom *= 0.9;
+        }
+        if ui.button("+").clicked() {
+          self.zoom *= 1.1;
+        }
+        ui.label(format!("{:.0}x", self.zoom));
+      });
+
       if let Some(tex) = &self.result_texture {
-        let _size = tex.size_vec2();
-        ui.image(&*tex); // &*tex -> SizedTexture, + size param
+        egui::ScrollArea::both()
+          .max_height(ui.available_height())
+          .show(ui, |ui| {
+            let desired_size = tex.size_vec2() * self.zoom;
+            let response = ui.image(&*tex);
+
+            if response.hovered() {
+              let scroll = ui.input(|i| i.raw_scroll_delta.y);
+              if scroll.abs() > 0.0 {
+                let factor = if scroll > 0.0 { 1.1 } else { 0.9 };
+                self.zoom = (self.zoom * factor).clamp(0.1, 20.0);
+              }
+            }
+          });
       } else {
         ui.label("Result image not available");
       }
-    }); // <- closes CentralPanel.show(|ui|)
-  } // <- closes fn update
-} // <- ADD: closes impl eframe::App
+    });
+  }
+}
 
 fn main() -> Result<(), eframe::Error> {
   let options = eframe::NativeOptions::default();
